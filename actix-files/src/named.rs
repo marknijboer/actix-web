@@ -392,17 +392,34 @@ impl NamedFile {
                 }
             };
 
-            let dur = mtime
-                .duration_since(UNIX_EPOCH)
-                .expect("modification time must be after epoch");
+            // Generate the ETAG depending on the modification time being before
+            // or after UNIX epoch.
+            let etag = if *mtime >= UNIX_EPOCH {
+                let dur = mtime
+                .duration_since(UNIX_EPOCH).unwrap();
+                format!(
+                    "{:x}:{:x}:{:x}:{:x}",
+                    ino,
+                    self.md.len(),
+                    dur.as_secs(),
+                    dur.subsec_nanos()
+                )
+            } else {
+                let dur = UNIX_EPOCH.duration_since(*mtime).unwrap();
 
-            header::EntityTag::new_strong(format!(
-                "{:x}:{:x}:{:x}:{:x}",
-                ino,
-                self.md.len(),
-                dur.as_secs(),
-                dur.subsec_nanos()
-            ))
+                // In this format template the modification dates are prepended
+                // with a '-' (minus) symbol to indicate the time being before
+                // UNIX epoch.
+                format!(
+                    "{:x}:{:x}:-{:x}:-{:x}",
+                    ino,
+                    self.md.len(),
+                    dur.as_secs(),
+                    dur.subsec_nanos()
+                )
+            };
+
+            header::EntityTag::new_strong(etag)
         })
     }
 
